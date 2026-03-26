@@ -4,7 +4,7 @@ import com.ai.testautomation.model.TestCase;
 import com.ai.testautomation.model.TestStep;
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
-import com.aventstack.extentreports.reporter.ExtentHtmlReporter;
+import com.aventstack.extentreports.reporter.ExtentSparkReporter;
 import io.github.bonigarcia.wdm.WebDriverManager;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
@@ -29,7 +29,7 @@ public class TestExecutorService {
             reportsDir.mkdirs();
             String reportFile = "reports/report_" + timestamp + ".html";
 
-            ExtentHtmlReporter html = new ExtentHtmlReporter(reportFile);
+            ExtentSparkReporter html = new ExtentSparkReporter(reportFile);
             ExtentReports reports = new ExtentReports();
             reports.attachReporter(html);
 

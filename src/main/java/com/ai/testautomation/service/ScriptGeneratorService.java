@@ -45,14 +45,14 @@ public class ScriptGeneratorService {
         sb.append("  private WebDriver driver;\n");
         sb.append("  @BeforeClass\n  public void setup() {\n    WebDriverManager.chromedriver().setup();\n    driver = new ChromeDriver();\n    driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));\n  }\n");
         sb.append("  @Test\n  public void test() throws Exception {\n");
-        for (TestStep s : tc.getSteps()) {
+            for (TestStep s : tc.getSteps()) {
             String action = s.getAction();
             String sel = s.getSelector();
-            String val = s.getValue();
-            if ("navigate".equalsIgnoreCase(action)) {
-                sb.append("    driver.get(\"").append(val).append("\");\n");
-            } else if ("assertTitleContains".equalsIgnoreCase(action)) {
-                sb.append("    if (!driver.getTitle().contains(\"").append(val).append("\")) throw new AssertionError(\"Title does not contain "+\"" ).append(val).append("\"\");\n");
+                String val = s.getValue();
+                if ("navigate".equalsIgnoreCase(action)) {
+                    sb.append("    driver.get(\"").append(escapeForJava(val)).append("\");\n");
+                } else if ("assertTitleContains".equalsIgnoreCase(action)) {
+                    sb.append("    if (!driver.getTitle().contains(\"").append(escapeForJava(val)).append("\")) throw new AssertionError(\"Title does not contain: ").append(escapeForJava(val)).append("\");\n");
             } else {
                 // generic comment
                 sb.append("    // step: ").append(action).append(" selector:").append(sel).append(" value:").append(val).append("\n");
@@ -63,4 +63,9 @@ public class ScriptGeneratorService {
         sb.append("}\n");
         return sb.toString();
     }
+
+        private String escapeForJava(String s) {
+            if (s == null) return "";
+            return s.replace("\\", "\\\\").replace("\"", "\\\"");
+        }
 }
