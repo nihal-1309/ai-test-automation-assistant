@@ -1,0 +1,10 @@
+target/
+*.log
+.idea/
+.vscode/
+generated-scripts/
+reports/
+*.iml
+.DS_Store
+/.mvn/
+/.settings/
