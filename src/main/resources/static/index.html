@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AI Test Automation Assistant</title>
+  <style>
+    body{font-family:system-ui,Arial;margin:40px}
+    input,textarea{width:100%;padding:8px;margin:6px 0}
+    button{padding:8px 12px}
+    .col{max-width:900px}
+  </style>
+</head>
+<body>
+  <div class="col">
+    <h1>AI Test Automation Assistant</h1>
+    <label>Website URL or manual scenario</label>
+    <input id="input" placeholder="https://example.com or 'Login with invalid password'" />
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button id="gen">Generate Testcases</button>
+      <button id="run">Generate & Run</button>
+      <button id="report">Open Latest Report</button>
+    </div>
+    <h3>Response</h3>
+    <pre id="out" style="background:#f6f6f6;padding:12px;height:320px;overflow:auto"></pre>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

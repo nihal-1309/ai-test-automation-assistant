@@ -37,23 +37,35 @@ public class OpenAIService {
         try {
             HttpClient client = HttpClient.newHttpClient();
             String prompt = buildPrompt(input);
-            String body = gson.toJson(new OpenAIRequest(model, prompt));
+                // Build Chat Completions v1 payload (messages array)
+                String payload = gson.toJson(new ChatRequest(model, new Message("user", prompt)));
 
-            HttpRequest req = HttpRequest.newBuilder()
+                HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(openaiUrl))
                     .timeout(Duration.ofSeconds(30))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
                     .build();
 
-            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-            // Minimal parsing: expecting the assistant to return JSON array of testcases
-            String respBody = resp.body();
-            Type listType = new TypeToken<List<TestCase>>(){}.getType();
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                String respBody = resp.body();
+            // Response from /chat/completions contains a choices[].message.content field.
             try {
-                List<TestCase> cases = gson.fromJson(respBody, listType);
-                if (cases != null && !cases.isEmpty()) return cases;
+                ChatResponse chatResp = gson.fromJson(respBody, ChatResponse.class);
+                if (chatResp != null && chatResp.choices!=null && chatResp.choices.length>0) {
+                    String content = chatResp.choices[0].message.content;
+                    // Try to parse JSON directly from content
+                    Type listType = new TypeToken<List<TestCase>>(){}.getType();
+                    try { List<TestCase> cases = gson.fromJson(content, listType); if (cases!=null && !cases.isEmpty()) return cases; } catch (Exception ignored) {}
+                    // Fallback: attempt to extract JSON substring
+                    int start = content.indexOf('[');
+                    int end = content.lastIndexOf(']');
+                    if (start>=0 && end>start) {
+                        String json = content.substring(start, end+1);
+                        try { List<TestCase> cases = gson.fromJson(json, listType); if (cases!=null && !cases.isEmpty()) return cases; } catch (Exception ignored) {}
+                    }
+                }
             } catch (Exception ignored) {}
             return sampleTestCases(input);
         } catch (IOException | InterruptedException e) {
@@ -84,10 +96,11 @@ public class OpenAIService {
 
     static class OpenAIRequest {
         String model;
-        String messages;
-        OpenAIRequest(String model, String prompt) {
-            this.model = model;
-            this.messages = prompt;
-        }
+        String prompt;
+        OpenAIRequest(String model, String prompt) { this.model = model; this.prompt = prompt; }
     }
+    static class ChatRequest { String model; Message[] messages; ChatRequest(String model, Message m){ this.model=model; this.messages=new Message[]{m}; }}
+    static class Message { String role; String content; Message(String role,String content){this.role=role;this.content=content;} }
+    static class ChatResponse { Choice[] choices; }
+    static class Choice { Message message; }
 }
