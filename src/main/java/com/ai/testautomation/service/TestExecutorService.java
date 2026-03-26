@@ -5,20 +5,27 @@ import com.ai.testautomation.model.TestStep;
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
 import com.aventstack.extentreports.reporter.ExtentSparkReporter;
-import io.github.bonigarcia.wdm.WebDriverManager;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.testng.TestNG;
 
+import javax.tools.JavaCompiler;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import java.io.File;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class TestExecutorService {
+
+    @Autowired
+    private ScriptGeneratorService scriptGeneratorService;
 
     private String lastReportPath = "";
 
@@ -33,24 +40,23 @@ public class TestExecutorService {
             ExtentReports reports = new ExtentReports();
             reports.attachReporter(html);
 
+            // Generate, compile and run each TestCase as TestNG class
+            List<String> classNames = new ArrayList<>();
             for (TestCase tc : testCases) {
                 ExtentTest t = reports.createTest(tc.getId() + " - " + tc.getName());
-                WebDriverManager.chromedriver().setup();
-                ChromeOptions opts = new ChromeOptions();
-                opts.addArguments("--headless=new");
-                WebDriver driver = new ChromeDriver(opts);
-                try {
-                    for (TestStep s : tc.getSteps()) {
-                        executeStep(driver, s, t);
-                    }
-                    t.pass("Test case executed");
-                } catch (AssertionError ae) {
-                    t.fail("Assertion failed: " + ae.getMessage());
-                } catch (Exception e) {
-                    t.fail("Error: " + e.getMessage());
-                } finally {
-                    driver.quit();
-                }
+                String javaPath = scriptGeneratorService.generateJavaTest(tc);
+                t.info("Generated source: " + javaPath);
+                // compile
+                boolean ok = compileJava(javaPath, t);
+                if (!ok) { t.fail("Compilation failed for " + javaPath); continue; }
+                String className = Path.of(javaPath).getFileName().toString().replaceFirst("\\.java$", "");
+                classNames.add(className);
+                t.pass("Compiled: " + className);
+            }
+
+            // Run TestNG on compiled classes
+            if (!classNames.isEmpty()) {
+                runTestNG(classNames, reports);
             }
 
             reports.flush();
@@ -61,31 +67,38 @@ public class TestExecutorService {
         }
     }
 
-    private void executeStep(WebDriver driver, TestStep s, com.aventstack.extentreports.ExtentTest t) {
-        String action = s.getAction();
-        String sel = s.getSelector();
-        String val = s.getValue();
-        switch (action.toLowerCase()) {
-            case "navigate":
-                driver.get(val);
-                t.info("Navigated to " + val);
-                break;
-            case "click":
-                driver.findElement(By.cssSelector(sel)).click();
-                t.info("Clicked " + sel);
-                break;
-            case "entertext":
-                driver.findElement(By.cssSelector(sel)).sendKeys(val);
-                t.info("Entered text into " + sel);
-                break;
-            case "asserttitlecontains":
-                String title = driver.getTitle();
-                if (!title.contains(val)) throw new AssertionError("Title did not contain: " + val + ", actual=" + title);
-                t.info("Title contains: " + val);
-                break;
-            default:
-                t.info("Unsupported step action: " + action);
+    private boolean compileJava(String sourcePath, ExtentTest t) {
+        try {
+            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+            if (compiler == null) { t.fail("No system Java compiler available"); return false; }
+            try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+                Iterable compilationUnits = fileManager.getJavaFileObjectsFromStrings(List.of(sourcePath));
+                JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, null, List.of("-d","generated-classes"), null, compilationUnits);
+                return task.call();
+            }
+        } catch (Exception e) {
+            t.fail("Compilation error: " + e.getMessage());
+            return false;
         }
+    }
+
+    private void runTestNG(List<String> classNames, ExtentReports reports) throws Exception {
+        // load classes from generated-classes
+        File classesDir = new File("generated-classes");
+        URLClassLoader loader = new URLClassLoader(new URL[]{ classesDir.toURI().toURL() }, this.getClass().getClassLoader());
+        TestNG testng = new TestNG();
+        List<Class> clsList = new ArrayList<>();
+        for (String cn : classNames) {
+            try {
+                Class cls = Class.forName(cn, true, loader);
+                clsList.add(cls);
+            } catch (ClassNotFoundException e) {
+                // ignore
+            }
+        }
+        if (clsList.isEmpty()) return;
+        testng.setTestClasses(clsList.toArray(new Class[0]));
+        testng.run();
     }
 
     public String getLatestReportPath() { return lastReportPath; }
