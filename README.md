@@ -25,6 +25,17 @@ mvn clean package
 java -jar target/ai-test-automation-assistant-0.0.1-SNAPSHOT.jar
 ```
 
+Docker:
+```bash
+# Build image (after running mvn package)
+docker build -t ai-test-automation-assistant:latest .
+# Run container
+docker run -p 8080:8080 --env OPENAI_API_KEY="$OPENAI_API_KEY" ai-test-automation-assistant:latest
+```
+
+CI:
+- A GitHub Actions workflow `.github/workflows/ci.yml` builds and runs unit tests on push/PR to `main`.
+
 APIs:
 
 - POST /api/generate-testcases
